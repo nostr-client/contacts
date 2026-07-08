@@ -34,9 +34,9 @@ async function myContacts(pool, refresh = false) {
 }
 
 function followedKeys(contactEvent) {
-  return (contactEvent?.tags ?? [])
+  return [...new Set((contactEvent?.tags ?? [])
     .filter((t) => t[0] === 'p' && HEX64.test(t[1] ?? ''))
-    .map((t) => t[1])
+    .map((t) => t[1]))]
 }
 
 async function publishContacts(pool, prevEvent, mutate) {
@@ -149,6 +149,8 @@ const LIST_STYLE = /* css */ `
   li { display: flex; align-items: center; gap: .7rem; padding: .55rem .8rem;
     background: var(--nc-surface, #fff); border: 1px solid var(--nc-line, #e9e6e0);
     border-radius: var(--nc-radius-sm, 9px); }
+  li img, li .name { cursor: pointer; }
+  li .name:hover { text-decoration: underline; }
   img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
     background: var(--nc-inset, #f4f2ee); }
   .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
@@ -195,6 +197,16 @@ class NostrContacts extends HTMLElement {
       name.textContent = npubShort(pk)
       const btn = document.createElement('nostr-follow-button')
       btn.setAttribute('pubkey', pk)
+      const openProfile = () => {
+        const custom = new CustomEvent('nostr:profile-click', {
+          detail: { pubkey: pk }, bubbles: true, composed: true, cancelable: true,
+        })
+        if (this.dispatchEvent(custom)) {
+          window.open('https://nostr-client.github.io/profile/#' + pk, '_blank', 'noopener')
+        }
+      }
+      img.onclick = openProfile
+      name.onclick = openProfile
       li.append(img, name, btn)
       list.append(li)
       profiles().get(pk, (profile) => {
