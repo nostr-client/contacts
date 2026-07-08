@@ -151,8 +151,9 @@ const LIST_STYLE = /* css */ `
     border-radius: var(--nc-radius-sm, 9px); }
   li img, li .name { cursor: pointer; }
   li .name:hover { text-decoration: underline; }
-  img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
-    background: var(--nc-inset, #f4f2ee); }
+  .pfp { width: 34px; height: 34px; border-radius: 50%; flex: none; overflow: hidden;
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-size: .9rem; }
+  .pfp img { width: 100%; height: 100%; object-fit: cover; }
   .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
     white-space: nowrap; font-weight: 600; }
 `
@@ -189,9 +190,10 @@ class NostrContacts extends HTMLElement {
     this.$('s').textContent = keys.length ? keys.length + ' following' : 'not following anyone yet'
     for (const pk of keys) {
       const li = document.createElement('li')
-      const img = document.createElement('img')
-      img.alt = ''
-      img.loading = 'lazy'
+      const img = document.createElement('span')
+      img.className = 'pfp'
+      const hue = parseInt(pk.slice(0, 4), 16) % 360
+      img.style.background = `linear-gradient(135deg, hsl(${hue} 62% 60%), hsl(${(hue + 55) % 360} 62% 44%))`
       const name = document.createElement('span')
       name.className = 'name'
       name.textContent = npubShort(pk)
@@ -211,8 +213,18 @@ class NostrContacts extends HTMLElement {
       list.append(li)
       profiles().get(pk, (profile) => {
         if (!profile) return
-        if (profile.display_name || profile.name) name.textContent = profile.display_name || profile.name
-        if (profile.picture?.startsWith('https://')) img.src = profile.picture
+        const display = profile.display_name || profile.name
+        if (display) {
+          name.textContent = display
+          if (!img.querySelector('img')) img.textContent = [...display][0].toUpperCase()
+        }
+        if (profile.picture?.startsWith('https://')) {
+          const real = document.createElement('img')
+          real.alt = ''
+          real.loading = 'lazy'
+          real.onload = () => { img.textContent = ''; img.append(real) }
+          real.src = profile.picture
+        }
       })
     }
   }
