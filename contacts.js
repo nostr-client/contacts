@@ -200,7 +200,7 @@ class NostrContacts extends HTMLElement {
       profiles().get(pk, (profile) => {
         if (!profile) return
         if (profile.display_name || profile.name) name.textContent = profile.display_name || profile.name
-        if (profile.picture) img.src = profile.picture
+        if (profile.picture?.startsWith('https://')) img.src = profile.picture
       })
     }
   }
