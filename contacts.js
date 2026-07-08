@@ -181,11 +181,15 @@ class NostrContacts extends HTMLElement {
   }
 
   async _render() {
+    // overlapping renders (login + contacts-changed firing together) must not
+    // both append — last call wins
+    const seq = (this._seq = (this._seq ?? 0) + 1)
     const list = this.$('list')
-    list.innerHTML = ''
-    if (!window.nostrPubkey) { this.$('s').textContent = 'log in to see your contacts'; return }
+    if (!window.nostrPubkey) { list.innerHTML = ''; this.$('s').textContent = 'log in to see your contacts'; return }
     this.$('s').textContent = 'loading…'
     const contacts = await myContacts(defaultPool())
+    if (seq !== this._seq) return
+    list.innerHTML = ''
     const keys = followedKeys(contacts)
     this.$('s').textContent = keys.length ? keys.length + ' following' : 'not following anyone yet'
     for (const pk of keys) {
