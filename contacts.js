@@ -221,7 +221,6 @@ class NostrContacts extends HTMLElement {
         if (profile.picture?.startsWith('https://')) {
           const real = document.createElement('img')
           real.alt = ''
-          real.loading = 'lazy'
           real.onload = () => { img.textContent = ''; img.append(real) }
           real.src = profile.picture
         }
