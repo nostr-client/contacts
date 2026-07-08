@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>contacts — follow list demo</title>
+<link rel="stylesheet" href="https://nostr-client.github.io/theme/theme.css">
+<style>
+  body { max-width: 42rem; margin: 2.5rem auto; padding: 0 1.2rem 4rem; }
+  h1 { font-size: 1.4rem; } h1 a { text-decoration: none; }
+  header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+  section { margin: 1.6rem 0; }
+  .try { display: flex; align-items: center; gap: .8rem; padding: .7rem .9rem;
+    background: var(--nc-surface); border: 1px solid var(--nc-line);
+    border-radius: var(--nc-radius-sm); }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="https://github.com/nostr-client/contacts">nostr-client / contacts</a></h1>
+  <nostr-login></nostr-login>
+</header>
+
+<section>
+  <p class="nc-muted">A follow button for any pubkey (updates your kind-3
+  contact list, preserving petnames/relays/content it doesn't understand):</p>
+  <div class="try">
+    <span>jack</span>
+    <nostr-follow-button pubkey="82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2"></nostr-follow-button>
+  </div>
+</section>
+
+<section>
+  <p class="nc-muted">…and your whole contact list:</p>
+  <nostr-contacts></nostr-contacts>
+</section>
+
+<script type="module">
+  import 'https://nostr-client.github.io/login/login.js'
+  import './contacts.js'
+</script>
+</body>
+</html>
