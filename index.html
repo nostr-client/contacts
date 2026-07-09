@@ -13,9 +13,11 @@
 <meta name="twitter:card" content="summary_large_image">
 <title>contacts — follow list demo</title>
 <link rel="stylesheet" href="https://nostr-client.github.io/theme/theme.css">
+<link rel="modulepreload" href="https://nostr-client.github.io/setup/setup.js">
 <link rel="modulepreload" href="https://nostr-client.github.io/pool/pool.js">
 <link rel="modulepreload" href="https://nostr-client.github.io/verify/verify.js">
 <link rel="modulepreload" href="https://nostr-client.github.io/cache/cache.js">
+<link rel="modulepreload" href="https://nostr-client.github.io/relay-manager/relay-manager.js">
 <link rel="modulepreload" href="https://nostr-client.github.io/note/note.js">
 <link rel="modulepreload" href="https://nostr-client.github.io/nip19/nip19.js">
 <link rel="modulepreload" href="https://nostr-client.github.io/login/login.js">
@@ -50,13 +52,8 @@
 </section>
 
 <script type="module">
-  import { Pool } from 'https://nostr-client.github.io/pool/pool.js'
-  import { withVerify } from 'https://nostr-client.github.io/verify/verify.js'
-  import { withCache } from 'https://nostr-client.github.io/cache/cache.js'
-  // verify inside, cache outside: only verified events are ever stored.
-  // Must be set before the components load (dynamic imports below — static
-  // ones would hoist above this line), so defaultPool() picks it up.
-  globalThis.__nostrClientPool = withCache(withVerify(new Pool()))
+  // hardened default pool: verified events, local cache, saved relays
+  await import('https://nostr-client.github.io/setup/setup.js')
   await import('https://nostr-client.github.io/login/login.js')
   await import('./contacts.js')
 </script>
