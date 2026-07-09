@@ -12,6 +12,9 @@
  *
  * Publishing a new contact list PRESERVES everything it doesn't understand:
  * non-p tags, relay/petname fields on p-tags, and the content field.
+ * If the existing list can't be fetched (relay timeout, wrong relays), it
+ * REFUSES to publish rather than overwrite the user's follows with a fresh
+ * list — pass { allowCreate: true } to follow() to publish a first list.
  * Fires 'nostr:contacts-changed' on window after a successful publish.
  */
 
@@ -28,7 +31,13 @@ async function myContacts(pool, refresh = false) {
   const cache = (globalThis.__nostrClientContacts ??= {})
   if (refresh || cache.pubkey !== key) {
     cache.pubkey = key
-    cache.promise = pool.get({ kinds: [3], authors: [key] })
+    // Never cache a miss: null may just mean the relays timed out, and a
+    // cached null would make every later publish start from an empty list.
+    const promise = pool.get({ kinds: [3], authors: [key] }).then((ev) => {
+      if (ev === null && cache.promise === promise) cache.pubkey = undefined
+      return ev
+    })
+    cache.promise = promise
   }
   return cache.promise
 }
@@ -39,9 +48,15 @@ function followedKeys(contactEvent) {
     .map((t) => t[1]))]
 }
 
-async function publishContacts(pool, prevEvent, mutate) {
+async function publishContacts(pool, prevEvent, mutate, { allowCreate = false } = {}) {
   const signer = window.nostrSigner
   if (!signer) throw new Error('no signer — log in first')
+  if (!prevEvent && !allowCreate) {
+    // A missing previous list usually means the fetch timed out or the list
+    // lives on other relays; publishing anyway would replace the user's whole
+    // follow list with this one change.
+    throw new Error('existing contact list not found (relay timeout?) — refusing to overwrite it; pass { allowCreate: true } to publish a first list')
+  }
   const tags = [...(prevEvent?.tags ?? [])]
   const content = prevEvent?.content ?? ''
   const newTags = mutate(tags)
@@ -57,14 +72,15 @@ async function publishContacts(pool, prevEvent, mutate) {
   return event
 }
 
-export async function follow(pubkey, pool = defaultPool()) {
+export async function follow(pubkey, pool = defaultPool(), { allowCreate = false } = {}) {
   const prev = await myContacts(pool)
   if (followedKeys(prev).includes(pubkey)) return prev
-  return publishContacts(pool, prev, (tags) => [...tags, ['p', pubkey]])
+  return publishContacts(pool, prev, (tags) => [...tags, ['p', pubkey]], { allowCreate })
 }
 
 export async function unfollow(pubkey, pool = defaultPool()) {
   const prev = await myContacts(pool)
+  if (!followedKeys(prev).includes(pubkey)) return prev
   return publishContacts(pool, prev, (tags) =>
     tags.filter((t) => !(t[0] === 'p' && t[1] === pubkey)))
 }
@@ -135,7 +151,7 @@ class NostrFollowButton extends HTMLElement {
     try {
       if (await isFollowing(this._pubkey)) await unfollow(this._pubkey)
       else await follow(this._pubkey)
-    } catch {}
+    } catch (err) { console.error('nostr-follow-button:', err) }
     this._refresh()
   }
 }

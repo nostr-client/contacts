@@ -26,7 +26,12 @@ import { follow, unfollow, isFollowing } from 'https://nostr-client.github.io/co
 - publishing a new list **preserves what it doesn't understand**: non-`p`
   tags, relay hints and petnames on `p` tags, and the `content` field —
   this component won't wipe your follows' metadata like careless clients do
-- the user's contact list is cached page-wide (one fetch, every button shares it)
+- if the existing list can't be fetched (relay timeout, list on other
+  relays), it **refuses to publish** rather than replace your follows with
+  a one-entry list; a genuinely new user creates their first list with
+  `follow(pubkey, pool, { allowCreate: true })`
+- the user's contact list is cached page-wide (one fetch, every button
+  shares it) — but a failed fetch is never cached, so the next click retries
 - fires `nostr:contacts-changed` on `window` — feeds can refresh a
   "following" view instantly
 
