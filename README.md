@@ -28,8 +28,14 @@ import { follow, unfollow, isFollowing } from 'https://nostr-client.github.io/co
   this component won't wipe your follows' metadata like careless clients do
 - if the existing list can't be fetched (relay timeout, list on other
   relays), it **refuses to publish** rather than replace your follows with
-  a one-entry list; a genuinely new user creates their first list with
-  `follow(pubkey, pool, { allowCreate: true })`
+  a one-entry list — the error has `code: 'NO_CONTACT_LIST'`; a genuinely
+  new user creates their first list with
+  `follow(pubkey, pool, { allowCreate: true })` (the follow button asks
+  for confirmation before doing this)
+- mutations are **serialized**: rapid clicks on several follow buttons
+  queue up instead of racing, so no update is lost
+- publish failures show on the button (brief error state + tooltip) and
+  log to the console
 - the user's contact list is cached page-wide (one fetch, every button
   shares it) — but a failed fetch is never cached, so the next click retries
 - fires `nostr:contacts-changed` on `window` — feeds can refresh a
