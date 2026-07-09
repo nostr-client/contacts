@@ -38,8 +38,14 @@ import { follow, unfollow, isFollowing } from 'https://nostr-client.github.io/co
   log to the console
 - the user's contact list is cached page-wide (one fetch, every button
   shares it) — but a failed fetch is never cached, so the next click retries
+- composes with [cache](https://github.com/nostr-client/cache) for instant
+  loads: reads render from IndexedDB immediately and refresh in the
+  background, while **mutations always re-confirm the latest list from the
+  network** first — a publish never builds on a stale cached copy (if that
+  confirmation fails, the error has `code: 'STALE_CONTACT_LIST'`)
 - fires `nostr:contacts-changed` on `window` — feeds can refresh a
-  "following" view instantly
+  "following" view instantly (also after a background refresh finds a newer
+  list)
 
 ## License
 

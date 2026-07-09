@@ -18,6 +18,14 @@
  * { allowCreate: true } to follow() to publish a first list. Mutations are
  * serialized so concurrent clicks can't publish from the same stale list.
  * Fires 'nostr:contacts-changed' on window after a successful publish.
+ *
+ * Composes with caching pool wrappers (cache.js): reads render instantly
+ * from the cache, but mutations re-confirm the latest list from the network
+ * ({ fresh: true }) so a publish never builds on a stale copy. If that
+ * confirmation fails while a cached list exists, the mutation throws
+ * 'STALE_CONTACT_LIST' rather than risk clobbering follows made elsewhere.
+ * 'nostr:contacts-changed' also fires when a background cache refresh finds
+ * a newer list.
  */
 
 import { defaultPool } from 'https://nostr-client.github.io/pool/pool.js'
@@ -26,22 +34,71 @@ import { npubShort } from 'https://nostr-client.github.io/nip19/nip19.js'
 
 const HEX64 = /^[0-9a-f]{64}$/
 
-/** Page-wide cached contact list for the logged-in user. */
+/**
+ * Page-wide cached contact list for the logged-in user.
+ * refresh=true forces a network fetch even through a caching pool wrapper
+ * ({ fresh: true }, understood by cache.js, ignored by the raw pool) —
+ * mutations must never build on a stale cached list.
+ */
 async function myContacts(pool, refresh = false) {
   if (!window.nostrPubkey) return null
   const key = window.nostrPubkey
   const cache = (globalThis.__nostrClientContacts ??= {})
   if (refresh || cache.pubkey !== key) {
     cache.pubkey = key
+    // a raw pool always answers from the network; only a caching wrapper
+    // (marked pool.cached) can hand back a stale list
+    cache.fresh = refresh || !pool.cached
     // Never cache a miss: null may just mean the relays timed out, and a
     // cached null would make every later publish start from an empty list.
-    const promise = pool.get({ kinds: [3], authors: [key] }).then((ev) => {
+    const promise = pool.get({ kinds: [3], authors: [key] }, {
+      fresh: refresh || undefined,
+      // caching pool wrappers serve a stale list instantly and refresh in
+      // the background; when a newer list lands, update and repaint
+      onUpdate: async (ev) => {
+        if (cache.pubkey !== key || window.nostrPubkey !== key) return
+        const cur = await cache.promise.catch(() => null)
+        cache.fresh = true
+        if (cur && cur.created_at >= ev.created_at) return
+        cache.promise = Promise.resolve(ev)
+        window.dispatchEvent(new CustomEvent('nostr:contacts-changed', { detail: { event: ev } }))
+      },
+    }).then((ev) => {
       if (ev === null && cache.promise === promise) cache.pubkey = undefined
       return ev
     })
     cache.promise = promise
   }
   return cache.promise
+}
+
+/**
+ * True when the in-memory list is known to reflect the network — a forced
+ * fetch, a completed background refresh, or our own publish — rather than a
+ * possibly stale cache-served copy.
+ */
+function listIsFresh() {
+  const cache = globalThis.__nostrClientContacts
+  return !!cache && cache.pubkey === window.nostrPubkey && cache.fresh === true
+}
+
+/**
+ * The previous list a mutation may safely build on: fetched fresh unless the
+ * in-memory copy already is. If the fresh fetch fails while a (possibly
+ * stale) copy exists, throws STALE_CONTACT_LIST instead of returning the
+ * stale copy — publishing from it could drop follows made elsewhere, and
+ * returning null could trigger the create-a-new-list flow over a real list.
+ */
+async function mutableContacts(pool) {
+  const cached = await myContacts(pool)
+  if (listIsFresh()) return cached
+  const prev = await myContacts(pool, true)
+  if (prev === null && cached !== null) {
+    const err = new Error('could not confirm the latest contact list from relays — try again')
+    err.code = 'STALE_CONTACT_LIST'
+    throw err
+  }
+  return prev
 }
 
 function followedKeys(contactEvent) {
@@ -71,6 +128,7 @@ async function publishContacts(pool, prevEvent, mutate, { allowCreate = false } 
   if (!results.some((r) => r.ok)) throw new Error('no relay accepted the update')
   const cache = (globalThis.__nostrClientContacts ??= {})
   cache.pubkey = window.nostrPubkey
+  cache.fresh = true
   cache.promise = Promise.resolve(event)
   window.dispatchEvent(new CustomEvent('nostr:contacts-changed', { detail: { event } }))
   return event
@@ -89,7 +147,7 @@ function serialize(fn) {
 
 export function follow(pubkey, pool = defaultPool(), { allowCreate = false } = {}) {
   return serialize(async () => {
-    const prev = await myContacts(pool)
+    const prev = await mutableContacts(pool)
     if (followedKeys(prev).includes(pubkey)) return prev
     return publishContacts(pool, prev, (tags) => [...tags, ['p', pubkey]], { allowCreate })
   })
@@ -97,7 +155,7 @@ export function follow(pubkey, pool = defaultPool(), { allowCreate = false } = {
 
 export function unfollow(pubkey, pool = defaultPool()) {
   return serialize(async () => {
-    const prev = await myContacts(pool)
+    const prev = await mutableContacts(pool)
     if (!followedKeys(prev).includes(pubkey)) return prev
     return publishContacts(pool, prev, (tags) =>
       tags.filter((t) => !(t[0] === 'p' && t[1] === pubkey)))
